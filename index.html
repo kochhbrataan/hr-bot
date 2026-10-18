@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HR Панель</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body class="bg-gray-50">
+    <div id="app" class="min-h-screen">
+        <div class="container mx-auto p-4">
+            <div class="bg-white rounded-lg shadow p-6">
+                <h1 class="text-3xl font-bold text-gray-800 mb-6">👑 HR Панель управления</h1>
+                
+                <div class="mb-6 flex gap-4">
+                    <button id="refreshBtn" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">
+                        🔄 Обновить
+                    </button>
+                    <button id="broadcastBtn" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded">
+                        📢 Рассылка
+                    </button>
+                </div>
+
+                <div id="broadcastModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div class="bg-white p-6 rounded-lg max-w-md w-full">
+                        <h2 class="text-xl font-bold mb-4">Массовая рассылка</h2>
+                        <textarea id="broadcastText" class="w-full border rounded p-2 mb-4 h-32" placeholder="Введите текст для рассылки..."></textarea>
+                        <div class="flex gap-2">
+                            <button id="sendBroadcastBtn" class="flex-1 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded">
+                                Отправить
+                            </button>
+                            <button id="closeBroadcastBtn" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded">
+                                Отмена
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full border-collapse">
+                        <thead>
+                            <tr class="bg-gray-100 border-b-2 border-gray-300">
+                                <th class="px-4 py-2 text-left">ФИО</th>
+                                <th class="px-4 py-2 text-left">Должность</th>
+                                <th class="px-4 py-2 text-center">Тест (баллы)</th>
+                                <th class="px-4 py-2 text-center">Статус</th>
+                                <th class="px-4 py-2 text-center">Вовлеченность</th>
+                                <th class="px-4 py-2 text-center">Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersTableBody">
+                            <tr class="text-center py-4 text-gray-500">
+                                <td colspan="6">Загрузка...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+
+        const initData = tg.initData;
+
+        async function loadUsers() {
+            try {
+                const res = await fetch(`/api/users?init_data=${encodeURIComponent(initData)}`);
+                if (!res.ok) throw new Error("Not authorized");
+                
+                const users = await res.json();
+                renderUsers(users);
+            } catch (e) {
+                document.getElementById("usersTableBody").innerHTML = `
+                    <tr class="text-center py-4 text-red-500">
+                        <td colspan="6">${e.message}</td>
+                    </tr>
+                `;
+            }
+        }
+
+        function renderUsers(users) {
+            const tbody = document.getElementById("usersTableBody");
+            tbody.innerHTML = users.map(u => `
+                <tr class="border-b hover:bg-gray-50">
+                    <td class="px-4 py-2">${u.full_name}</td>
+                    <td class="px-4 py-2">${u.position}</td>
+                    <td class="px-4 py-2 text-center font-semibold">${u.test_score}/3</td>
+                    <td class="px-4 py-2 text-center">
+                        <span class="px-3 py-1 rounded text-sm ${u.status === 'completed' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}">
+                            ${u.status === 'completed' ? '✅ Завершен' : '⏳ В процессе'}
+                        </span>
+                    </td>
+                    <td class="px-4 py-2 text-center ${u.risk ? 'bg-red-100 font-bold text-red-700' : ''}">
+                        ${u.engagement_avg}⭐
+                    </td>
+                    <td class="px-4 py-2 text-center">
+                        <button onclick="fireUser(${u.user_id})" class="bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded text-sm">
+                            Уволить
+                        </button>
+                    </td>
+                </tr>
+            `).join("");
+        }
+
+        async function fireUser(userId) {
+            if (!confirm("Вы уверены?")) return;
+            
+            try {
+                const res = await fetch(`/api/fire?init_data=${encodeURIComponent(initData)}`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ target_id: userId })
+                });
+                
+                if (!res.ok) throw new Error("Error");
+                loadUsers();
+            } catch (e) {
+                alert("Ошибка: " + e.message);
+            }
+        }
+
+        async function sendBroadcast() {
+            const text = document.getElementById("broadcastText").value;
+            if (!text.trim()) {
+                alert("Текст не может быть пустым");
+                return;
+            }
+            
+            try {
+                const res = await fetch(`/api/broadcast?init_data=${encodeURIComponent(initData)}`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ text })
+                });
+                
+                if (!res.ok) throw new Error("Error");
+                const result = await res.json();
+                alert(`✅ Отправлено ${result.success}/${result.total} сотрудникам`);
+                document.getElementById("broadcastModal").classList.add("hidden");
+                document.getElementById("broadcastText").value = "";
+            } catch (e) {
+                alert("Ошибка: " + e.message);
+            }
+        }
+
+        document.getElementById("refreshBtn").addEventListener("click", loadUsers);
+        document.getElementById("broadcastBtn").addEventListener("click", () => {
+            document.getElementById("broadcastModal").classList.remove("hidden");
+        });
+        document.getElementById("closeBroadcastBtn").addEventListener("click", () => {
+            document.getElementById("broadcastModal").classList.add("hidden");
+        });
+        document.getElementById("sendBroadcastBtn").addEventListener("click", sendBroadcast);
+
+        loadUsers();
+        setInterval(loadUsers, 30000);
+    </script>
+</body>
+</html>
