@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>HR-панель</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root {
+    --bg: var(--tg-theme-bg-color, #ffffff);
+    --surface: var(--tg-theme-secondary-bg-color, #f1f2f4);
+    --text: var(--tg-theme-text-color, #16181d);
+    --hint: var(--tg-theme-hint-color, #7a808c);
+    --accent: var(--tg-theme-button-color, #2a6df4);
+    --accent-text: var(--tg-theme-button-text-color, #ffffff);
+    --line: rgba(127, 134, 148, 0.22);
+    --good: #2e9d78;
+    --good-bg: #2e9d7826;
+    --warn: #c98a12;
+    --warn-bg: #d99a1e2b;
+    --bad: #d9453f;
+    --bad-bg: #d9453f22;
+    --radius: 14px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: var(--tg-theme-bg-color, #16181d);
+      --surface: var(--tg-theme-secondary-bg-color, #21242b);
+      --text: var(--tg-theme-text-color, #f2f3f5);
+      --hint: var(--tg-theme-hint-color, #8d94a0);
+      --good: #4cc9a0;
+      --warn: #e8b04a;
+      --bad: #ff6b64;
+    }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 16px; line-height: 1.4;
+    padding: env(safe-area-inset-top, 0px) 0 0;
+  }
+  button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
+  button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .wrap { max-width: 640px; margin: 0 auto; padding: 0 16px; }
+
+  /* Шапка */
+  .top { display: flex; align-items: flex-start; justify-content: space-between; padding: 18px 0 12px; gap: 12px; }
+  .top h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
+  .top p { margin: 2px 0 0; color: var(--hint); font-size: 14px; min-height: 20px; }
+  .icon-btn { width: 40px; height: 40px; border-radius: 50%; background: var(--surface); display: grid; place-items: center; flex: none; }
+  .icon-btn svg { width: 20px; height: 20px; }
+  .icon-btn.spin svg { animation: spin 0.8s linear infinite; }
+
+  /* Поиск и фильтр */
+  .tools { position: sticky; top: 0; background: var(--bg); padding: 4px 0 12px; z-index: 5; }
+  .search {
+    width: 100%; border: 0; border-radius: 12px; background: var(--surface); color: var(--text);
+    padding: 12px 14px; font: inherit; margin-bottom: 10px;
+  }
+  .search::placeholder { color: var(--hint); }
+  .seg { display: grid; grid-template-columns: repeat(4, 1fr); background: var(--surface); border-radius: 12px; padding: 3px; gap: 2px; }
+  .seg button { padding: 8px 4px; border-radius: 10px; font-size: 13px; color: var(--hint); line-height: 1.2; }
+  .seg button b { display: block; font-size: 17px; color: var(--text); font-weight: 650; }
+  .seg button[aria-pressed="true"] { background: var(--bg); box-shadow: 0 1px 3px rgba(0,0,0,.12); color: var(--text); }
+  .seg button.risk b { color: var(--bad); }
+
+  /* Список сотрудников */
+  main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
+  .row { border-bottom: 1px solid var(--line); }
+  .row:last-child { border-bottom: 0; }
+  .row-head { width: 100%; display: flex; align-items: center; gap: 12px; padding: 12px 0; text-align: left; }
+  .avatar { width: 44px; height: 44px; border-radius: 50%; background: var(--surface); display: grid; place-items: center; font-weight: 650; font-size: 15px; flex: none; color: var(--hint); }
+  .row.is-risk .avatar { background: var(--bad-bg); color: var(--bad); }
+  .who { flex: 1; min-width: 0; }
+  .who .name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .who .pos { color: var(--hint); font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .state { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; margin-top: 3px; }
+  .state i { width: 7px; height: 7px; border-radius: 50%; background: var(--warn); }
+  .state.done i { background: var(--good); }
+  .state.done { color: var(--good); }
+  .state.wip { color: var(--warn); }
+
+  .mood { text-align: right; flex: none; }
+  .bars { display: flex; gap: 3px; justify-content: flex-end; }
+  .bars span { width: 7px; height: 20px; border-radius: 3px; background: var(--line); }
+  .bars span.on { background: var(--good); }
+  .is-risk .bars span.on { background: var(--bad); }
+  .mood small { display: block; margin-top: 3px; font-size: 12px; color: var(--hint); }
+  .is-risk .mood small { color: var(--bad); font-weight: 600; }
+
+  .details { display: none; padding: 0 0 14px 56px; }
+  .row.open .details { display: block; }
+  .facts { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 0 0 12px; font-size: 14px; }
+  .facts dt { color: var(--hint); }
+  .facts dd { margin: 0; font-weight: 500; }
+  .danger { border: 1.5px solid var(--bad); color: var(--bad); border-radius: 10px; padding: 9px 14px; font-weight: 600; font-size: 14px; }
+  .danger:active { background: var(--bad-bg); }
+
+  /* Пустые состояния и ошибки */
+  .notice { text-align: center; padding: 48px 16px; color: var(--hint); }
+  .notice h2 { margin: 0 0 8px; font-size: 18px; color: var(--text); }
+  .notice p { margin: 0 auto 16px; max-width: 320px; font-size: 15px; }
+  .notice code { background: var(--surface); padding: 2px 8px; border-radius: 6px; color: var(--text); font-size: 15px; }
+  .ghost { background: var(--surface); border-radius: 10px; padding: 10px 18px; font-weight: 600; }
+
+  .skeleton { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .skeleton .dot { width: 44px; height: 44px; border-radius: 50%; background: var(--surface); }
+  .skeleton .ln { height: 12px; border-radius: 6px; background: var(--surface); margin: 6px 0; }
+  .skeleton, .skeleton * { animation: pulse 1.4s ease-in-out infinite; }
+
+  /* Нижняя кнопка */
+  .bar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 8;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+    background: linear-gradient(to top, var(--bg) 70%, transparent);
+  }
+  .bar .inner { max-width: 640px; margin: 0 auto; }
+  .primary { width: 100%; background: var(--accent); color: var(--accent-text); border-radius: 12px; padding: 14px; font-weight: 650; }
+  .primary:disabled { opacity: .5; }
+
+  /* Шторка рассылки */
+  .sheet-wrap { position: fixed; inset: 0; z-index: 20; display: flex; align-items: flex-end; justify-content: center; }
+  .sheet-wrap[hidden] { display: none; }
+  .backdrop { position: absolute; inset: 0; background: rgba(0,0,0,.45); }
+  .sheet {
+    position: relative; width: 100%; max-width: 640px; background: var(--bg);
+    border-radius: 20px 20px 0 0; padding: 18px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+    animation: rise .22s ease-out;
+  }
+  .sheet h2 { margin: 0 0 4px; font-size: 20px; }
+  .sheet .hint { margin: 0 0 12px; color: var(--hint); font-size: 14px; }
+  .sheet textarea {
+    width: 100%; min-height: 130px; resize: vertical; border: 0; border-radius: 12px;
+    background: var(--surface); color: var(--text); padding: 12px 14px; font: inherit;
+  }
+  .sheet .count { text-align: right; font-size: 12px; color: var(--hint); margin: 4px 0 12px; }
+  .sheet .actions { display: grid; grid-template-columns: 1fr 2fr; gap: 10px; }
+
+  .toast {
+    position: fixed; left: 50%; bottom: calc(84px + env(safe-area-inset-bottom, 0px)); transform: translate(-50%, 12px);
+    background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 12px; font-size: 14px;
+    opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; z-index: 30; max-width: 90%; text-align: center;
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes pulse { 50% { opacity: .55; } }
+  @keyframes rise { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Сотрудники</h1>
+      <p id="sub"></p>
+    </div>
+    <button class="icon-btn" id="refresh" aria-label="Обновить список">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+    </button>
+  </header>
+
+  <div class="tools">
+    <input class="search" id="q" type="search" placeholder="Поиск по имени или должности" autocomplete="off">
+    <div class="seg" id="seg" role="group" aria-label="Фильтр сотрудников">
+      <button data-f="all" aria-pressed="true"><b id="c-all">0</b>Все</button>
+      <button data-f="wip" aria-pressed="false"><b id="c-wip">0</b>В процессе</button>
+      <button data-f="done" aria-pressed="false"><b id="c-done">0</b>Завершили</button>
+      <button data-f="risk" class="risk" aria-pressed="false"><b id="c-risk">0</b>Риск</button>
+    </div>
+  </div>
+
+  <main id="list" aria-live="polite"></main>
+</div>
+
+<div class="bar"><div class="inner"><button class="primary" id="openBc">Отправить объявление</button></div></div>
+
+<div class="sheet-wrap" id="sheet" hidden>
+  <div class="backdrop" id="backdrop"></div>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+    <h2 id="sheetTitle">Объявление сотрудникам</h2>
+    <p class="hint">Сообщение получат все действующие сотрудники.</p>
+    <textarea id="bcText" maxlength="1000" placeholder="Напишите текст объявления"></textarea>
+    <div class="count"><span id="bcCount">0</span> / 1000</div>
+    <div class="actions">
+      <button class="ghost" id="bcCancel">Отмена</button>
+      <button class="primary" id="bcSend">Отправить</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+const tg = window.Telegram && window.Telegram.WebApp;
+if (tg) { tg.ready(); tg.expand(); }
+const initData = (tg && tg.initData) || "";
+const myId = tg && tg.initDataUnsafe && tg.initDataUnsafe.user ? tg.initDataUnsafe.user.id : null;
+
+const state = { users: [], filter: "all", q: "", open: null, loading: true, error: null };
+const $ = id => document.getElementById(id);
+
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+const num = v => { const n = Number(v); return isFinite(n) ? n : 0; };
+const isRisk = u => num(u.engagement_avg) > 0 && num(u.engagement_avg) < 3;
+const isDone = u => u.status === "completed";
+
+function initials(name) {
+  const parts = String(name || "?").trim().split(/\s+/).slice(0, 2);
+  return parts.map(p => p[0] ? p[0].toUpperCase() : "").join("") || "?";
+}
+
+function haptic(type) {
+  try { tg.HapticFeedback.notificationOccurred(type); } catch (e) {}
+}
+
+function toast(text) {
+  const t = $("toast");
+  t.textContent = text;
+  t.classList.add("show");
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.classList.remove("show"), 2600);
+}
+
+function askConfirm(message) {
+  return new Promise(resolve => {
+    if (tg && tg.showConfirm) tg.showConfirm(message, ok => resolve(!!ok));
+    else resolve(window.confirm(message));
+  });
+}
+
+async function api(path, options) {
+  const res = await fetch(path + "?init_data=" + encodeURIComponent(initData), options);
+  if (!res.ok) {
+    let detail = "";
+    try { detail = (await res.json()).detail || ""; } catch (e) {}
+    const err = new Error(detail || ("Ошибка " + res.status));
+    err.status = res.status;
+    throw err;
+  }
+  return res.json();
+}
+
+async function load(manual) {
+  if (!initData) {
+    state.loading = false;
+    state.error = { kind: "browser" };
+    return render();
+  }
+  if (manual) $("refresh").classList.add("spin");
+  try {
+    state.users = await api("/api/users");
+    state.error = null;
+  } catch (e) {
+    state.error = [400, 401, 403].includes(e.status) ? { kind: "denied" } : { kind: "network", msg: e.message };
+  }
+  state.loading = false;
+  $("refresh").classList.remove("spin");
+  render();
+}
+
+function matches(u) {
+  const q = state.q.trim().toLowerCase();
+  if (q && !(String(u.full_name).toLowerCase().includes(q) || String(u.position).toLowerCase().includes(q))) return false;
+  if (state.filter === "wip") return !isDone(u);
+  if (state.filter === "done") return isDone(u);
+  if (state.filter === "risk") return isRisk(u);
+  return true;
+}
+
+function rowHtml(u) {
+  const risk = isRisk(u), done = isDone(u), avg = num(u.engagement_avg);
+  const filled = Math.round(avg);
+  const bars = [1, 2, 3, 4, 5].map(i => `<span class="${i <= filled ? "on" : ""}"></span>`).join("");
+  const mood = avg > 0 ? (risk ? "Низкая " : "") + avg.toFixed(1) : "нет оценок";
+  const open = state.open === u.user_id;
+  return `
+  <div class="row ${risk ? "is-risk" : ""} ${open ? "open" : ""}" data-id="${esc(u.user_id)}">
+    <button class="row-head" data-toggle="${esc(u.user_id)}" aria-expanded="${open}">
+      <div class="avatar">${esc(initials(u.full_name))}</div>
+      <div class="who">
+        <div class="name">${esc(u.full_name)}</div>
+        <div class="pos">${esc(u.position)}</div>
+        <div class="state ${done ? "done" : "wip"}"><i></i>${done ? "Онбординг пройден" : "Онбординг идёт"}</div>
+      </div>
+      <div class="mood">
+        <div class="bars" aria-hidden="true">${bars}</div>
+        <small>${esc(mood)}</small>
+      </div>
+    </button>
+    <div class="details">
+      <dl class="facts">
+        <dt>Тест</dt><dd>${esc(num(u.test_score))} из 3</dd>
+        <dt>Вовлечённость</dt><dd>${avg > 0 ? avg.toFixed(1) + " из 5" : "оценок пока нет"}</dd>
+      </dl>
+      <button class="danger" data-fire="${esc(u.user_id)}">Уволить сотрудника</button>
+    </div>
+  </div>`;
+}
+
+function render() {
+  const all = state.users;
+  $("c-all").textContent = all.length;
+  $("c-wip").textContent = all.filter(u => !isDone(u)).length;
+  $("c-done").textContent = all.filter(isDone).length;
+  $("c-risk").textContent = all.filter(isRisk).length;
+  document.querySelectorAll("#seg button").forEach(b =>
+    b.setAttribute("aria-pressed", String(b.dataset.f === state.filter)));
+
+  const list = $("list");
+  const sub = $("sub");
+
+  if (state.loading) {
+    sub.textContent = "Загружаем список…";
+    list.innerHTML = Array(5).fill(`<div class="skeleton"><div class="dot"></div><div style="flex:1"><div class="ln" style="width:55%"></div><div class="ln" style="width:35%"></div></div></div>`).join("");
+    return;
+  }
+
+  if (state.error) {
+    sub.textContent = "";
+    const e = state.error;
+    if (e.kind === "browser") {
+      list.innerHTML = `<div class="notice"><h2>Откройте из Telegram</h2><p>Панель работает только внутри Telegram. Нажмите кнопку меню в чате с ботом.</p></div>`;
+    } else if (e.kind === "denied") {
+      list.innerHTML = `<div class="notice"><h2>Нет доступа</h2><p>Панель открывается только администраторам.${myId ? " Ваш Telegram ID: <code>" + esc(myId) + "</code>. Добавьте его в переменную ADMIN_IDS." : ""}</p></div>`;
+    } else {
+      list.innerHTML = `<div class="notice"><h2>Не удалось загрузить список</h2><p>Проверьте соединение и попробуйте ещё раз.</p><button class="ghost" id="retry">Повторить</button></div>`;
+    }
+    return;
+  }
+
+  const rows = all.filter(matches).sort((a, b) =>
+    (isRisk(b) - isRisk(a)) || String(a.full_name).localeCompare(String(b.full_name), "ru"));
+  sub.textContent = all.length ? "Показано " + rows.length + " из " + all.length : "";
+
+  if (!all.length) {
+    list.innerHTML = `<div class="notice"><h2>Сотрудников пока нет</h2><p>Они появятся здесь, когда начнут общаться с ботом и проходить онбординг.</p></div>`;
+  } else if (!rows.length) {
+    list.innerHTML = `<div class="notice"><h2>Ничего не найдено</h2><p>Измените запрос или выберите другой фильтр.</p></div>`;
+  } else {
+    list.innerHTML = rows.map(rowHtml).join("");
+  }
+}
+
+async function fireUser(id) {
+  const u = state.users.find(x => String(x.user_id) === String(id));
+  const name = u ? u.full_name : "сотрудника";
+  if (!(await askConfirm("Уволить: " + name + "? Ему придёт уведомление."))) return;
+  try {
+    await api("/api/fire", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ target_id: Number(id) })
+    });
+    haptic("success");
+    toast("Уволен: " + name);
+    state.open = null;
+    load();
+  } catch (e) {
+    haptic("error");
+    toast("Не удалось уволить: " + e.message);
+  }
+}
+
+function openSheet() { $("sheet").hidden = false; setTimeout(() => $("bcText").focus(), 50); }
+function closeSheet() { $("sheet").hidden = true; }
+
+async function sendBroadcast() {
+  const text = $("bcText").value.trim();
+  if (!text) { toast("Напишите текст объявления"); return; }
+  if (!(await askConfirm("Отправить объявление всем действующим сотрудникам?"))) return;
+  const btn = $("bcSend");
+  btn.disabled = true;
+  btn.textContent = "Отправляем…";
+  try {
+    const r = await api("/api/broadcast", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text })
+    });
+    haptic("success");
+    toast("Отправлено " + r.success + " из " + r.total);
+    $("bcText").value = "";
+    $("bcCount").textContent = "0";
+    closeSheet();
+  } catch (e) {
+    haptic("error");
+    toast("Не удалось отправить: " + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Отправить";
+  }
+}
+
+// События
+$("list").addEventListener("click", e => {
+  const fire = e.target.closest("[data-fire]");
+  if (fire) return fireUser(fire.dataset.fire);
+  const tgl = e.target.closest("[data-toggle]");
+  if (tgl) {
+    const id = Number(tgl.dataset.toggle);
+    state.open = state.open === id ? null : id;
+    render();
+  }
+  if (e.target.closest("#retry")) { state.loading = true; render(); load(); }
+});
+$("seg").addEventListener("click", e => {
+  const b = e.target.closest("button[data-f]");
+  if (b) { state.filter = b.dataset.f; render(); }
+});
+$("q").addEventListener("input", e => { state.q = e.target.value; render(); });
+$("refresh").addEventListener("click", () => load(true));
+$("openBc").addEventListener("click", openSheet);
+$("bcCancel").addEventListener("click", closeSheet);
+$("backdrop").addEventListener("click", closeSheet);
+$("bcSend").addEventListener("click", sendBroadcast);
+$("bcText").addEventListener("input", e => { $("bcCount").textContent = e.target.value.length; });
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeSheet(); });
+
+render();
+load();
+setInterval(() => { if (!document.hidden && $("sheet").hidden && !state.error) load(); }, 30000);
+</script>
+</body>
+</html>
