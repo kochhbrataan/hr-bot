@@ -8,5 +8,6 @@ build:
   requirementsPath: requirements.txt
 
 run:
+  scriptName: main.py
   persistenceMount: /data
-  startupCommand: python main.py
+  containerPort: 8000
