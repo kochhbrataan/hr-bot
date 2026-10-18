@@ -1,4 +1,5 @@
 import os
+import html
 import hmac
 import hashlib
 import json
@@ -72,7 +73,8 @@ def get_users(init_data: str = Query(...)):
     users = db.get_all_users()
     result = []
     for u in users:
-        if u[7] == "fired":
+        # Уволенных и самих администраторов в списке сотрудников не показываем
+        if u[7] == "fired" or u[4] == "admin" or u[0] in ADMIN_IDS:
             continue
         avg = float(u[10] or 0)
         result.append({
@@ -102,8 +104,8 @@ def broadcast(data: dict, init_data: str = Query(...)):
 
     for u in users:
         try:
-            # Без parse_mode: иначе символы _ и * в тексте ломают отправку
-            bot.send_message(u[0], f"📢 Объявление от HR:\n\n{text}")
+            # Текст экранируем: бот отправляет сообщения в режиме HTML
+            bot.send_message(u[0], f"📢 <b>Объявление от HR:</b>\n\n{html.escape(text)}")
             success += 1
         except Exception as e:
             print(f"Broadcast to {u[0]} failed: {e}")
