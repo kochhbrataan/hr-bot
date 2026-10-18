@@ -24,7 +24,10 @@ load_dotenv()
 
 TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_IDS = [int(x) for x in os.getenv("ADMIN_IDS", "").replace(" ", "").split(",") if x]
-MINI_APP_URL = os.getenv("MINI_APP_URL", "")
+MINI_APP_URL = os.getenv("MINI_APP_URL", "").strip().strip('"').strip("'").rstrip("/")
+if MINI_APP_URL and not MINI_APP_URL.startswith(("http://", "https://")):
+    MINI_APP_URL = "https://" + MINI_APP_URL
+print(f"MINI_APP_URL = {MINI_APP_URL!r}")
 UPLOAD_DIR = os.getenv("UPLOAD_DIR", "/data/uploads")
 # Часовой пояс для утренних сообщений (Казахстан = +5). Можно поменять переменной TZ_OFFSET_HOURS
 TZ = timezone(timedelta(hours=int(os.getenv("TZ_OFFSET_HOURS", "5"))))
