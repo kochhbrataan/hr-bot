@@ -4,6 +4,7 @@ import threading
 import uvicorn
 
 import db
+import demo_data
 from bot import start_polling, background_scheduler, setup_menu_buttons
 
 
@@ -13,6 +14,13 @@ def run_app():
 
 if __name__ == "__main__":
     db.init_db()
+
+    # Демо-сотрудники для показа проекта: переменная DEMO_DATA=on или DEMO_DATA=clear
+    demo_mode = os.getenv("DEMO_DATA", "").strip().lower()
+    if demo_mode == "on":
+        demo_data.seed()
+    elif demo_mode == "clear":
+        demo_data.clear()
 
     # Бот
     threading.Thread(target=start_polling, daemon=True).start()
