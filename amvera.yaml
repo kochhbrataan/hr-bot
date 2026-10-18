@@ -1,5 +1,4 @@
 meta:
-  environment: production
   toolchain:
     name: python
     version: "3.11"
